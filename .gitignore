@@ -1,0 +1,39 @@
+# Carpetas de compilación
+build/
+dist/
+*.egg-info/
+
+# Archivos generados por PyInstaller
+*.spec
+*.exe
+*.app
+
+# Archivos compilados Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Entorno virtual
+venv/
+env/
+ENV/
+.venv
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Archivos de sistema
+.env
+.env.local
+*.log
+
+# Archivos generados por el programa
+*.ico
+icono.ico
