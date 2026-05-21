@@ -11,7 +11,7 @@ from tkinter import filedialog, messagebox, ttk
 from PIL import Image, ImageDraw
 import pystray
 from src.procesador import escanear_roles_bdp
-from src.proceso_pdf_sintesis import procesar_sintesis_pdf
+from src.proceso_pdf_sintesis import procesar_sintesis_pdf, procesar_archivo
 
 
 
@@ -196,7 +196,7 @@ class AppEscritorio:
                                      font=("Arial", 10), fg="orange", width=40)
         self.label_archivo.pack(pady=5)
         
-        btn_seleccionar = tk.Button(frame_archivo, text="📁 Seleccionar PDF",
+        btn_seleccionar = tk.Button(frame_archivo, text="📁 Seleccionar Archivo (PDF/TXT)",
                                    command=self.seleccionar_archivo,
                                    font=("Arial", 11), bg="#e8e8e8",
                                    padx=20, pady=8)
@@ -224,8 +224,8 @@ class AppEscritorio:
     
     def seleccionar_archivo(self):
         archivo = filedialog.askopenfilename(
-            title="Seleccionar PDF",
-            filetypes=[("PDF files", "*.pdf")]
+            title="Seleccionar archivo (PDF o TXT)",
+            filetypes=[("PDF files", "*.pdf"), ("Text files", "*.txt"), ("All files", "*.*")]
         )
         
         if archivo:
@@ -239,7 +239,7 @@ class AppEscritorio:
         if self.tipo_procesamiento.get() == "roles_bdp":
             self.subtitulo.config(text="Selecciona un PDF de usuarios BDP\ny obtén el Excel con sus roles")
         else:
-            self.subtitulo.config(text="Selecciona un PDF de reporte de Síntesis\ny obtén el Excel con los operadores")
+            self.subtitulo.config(text="Selecciona un PDF o TXT de reporte de Síntesis\ny obtén el Excel con los operadores")
     
     def procesar_en_hilo(self):
         """Ejecutar el procesamiento en un hilo separado para no bloquear la UI"""
@@ -258,7 +258,7 @@ class AppEscritorio:
                 titulo_dialogo = "Roles BDP"
                 archivo_defecto = "Roles_BDP.xlsx"
             else:  # sintesis
-                df = procesar_sintesis_pdf(self.archivo_seleccionado)
+                df = procesar_archivo(self.archivo_seleccionado)
                 titulo_dialogo = "Síntesis"
                 archivo_defecto = "Operadores_Sintesis.xlsx"
             

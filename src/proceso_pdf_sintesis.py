@@ -1,6 +1,8 @@
 import pandas as pd
 import re
 import pdfplumber
+import os
+from pathlib import Path
 
 
 def procesar_texto_reporte(texto):
@@ -31,7 +33,7 @@ def procesar_texto_reporte(texto):
     for b in basura_previa:
         texto = re.sub(b, ' ', texto, flags=re.IGNORECASE)
         
-    texto = re.sub(r'\s+', ' ', texto) # Normaliza espacios
+    texto = re.sub(r'\s+', ' ', texto) 
 
     patron_registro = r'\b(\d{3})\s+(880|\d{1,2})\s+(880|\d{1,2})\s+(\d{1,6})\s+(.*?)(?=\s+\d{3}\s+(?:880\s+\d{1,2}|\d{1,2}\s+880)\s+\d{1,6}|\s*$)'
     
@@ -39,25 +41,36 @@ def procesar_texto_reporte(texto):
     datos_procesados = []
 
     roles_posibles = [
-        'CREDITOS BDP', 'CONTABILIDAD BDP', 'CONTABILIDAD BDF', 
+        'PEPE CONS.HISTORI', 'CREDITOS BDP', 'CONTABILIDAD BDP', 'CONTABILIDAD BDF', 
         'ADM. NACIONAL', 'OPERADOR SFL', 'SUP. AGENCIA', 
-        'CARTERA BDP', 'CREDITOS'
+        'CARTERA BDP', 'CREDITOS', 'CONS.HISTORI'
     ]
 
     for ciu, val1, val2, cod, resto in registros:
         entidad = '880'
         ag = val2 if val1 == '880' else val1
 
-        # 1. Extraer CTA.UNICA
-        cta_match = re.search(r'\b(\d{6,}[A-Za-z]+\d*)\b', resto)
-        cta_unica = cta_match.group(1) if cta_match else ''
-        if cta_unica:
+       
+        cta_unica = ''
+        
+      
+        cta_match = re.search(r'\b(\d{7,})\b', resto)
+        if cta_match:
+            cta_unica = cta_match.group(1)
             resto = resto.replace(cta_unica, '', 1)
         
+      
+        if not cta_unica:
+            cta_match = re.search(r'\b(\d{6,}[A-Za-z]+\d*)\b', resto)
+            if cta_match:
+                cta_unica = cta_match.group(1)
+                resto = resto.replace(cta_unica, '', 1)
+        
+       
         if not cta_unica:
             cta_match = re.search(r'\b((?=\w*[a-z])(?=\w*[A-Z])\w+|\d{3,}[A-Za-z]{1,}|[A-Za-z]{1,}\d+)\b', resto)
-            cta_unica = cta_match.group(1) if cta_match else ''
-            if cta_unica:
+            if cta_match:
+                cta_unica = cta_match.group(1)
                 resto = resto.replace(cta_unica, '', 1)
         
         # 2. Extraer ESTADO (X o V)
@@ -80,9 +93,14 @@ def procesar_texto_reporte(texto):
         if nro_telf:
             resto = resto.replace(nro_telf, '', 1)
                 
-       
+        # 5. Limpiar fechas y datos adicionales
         resto = re.sub(r'\b\d{2,4}/\d{2}/\d{2,4}\b', '', resto) 
         resto = re.sub(r'\b\d{2}/\d{2}/\d{2}\b', '', resto)
+        
+        # 6. Limpiar DPTO y CIUDAD (con o sin espacio después de :)
+        resto = re.sub(r'\s*DPTO\s*:\s*\d+', '', resto, flags=re.IGNORECASE)
+        resto = re.sub(r'\s*CIUDAD\s*:\s*\d+', '', resto, flags=re.IGNORECASE)
+        
         nombre = re.sub(r'\s+', ' ', resto).strip()
         
         datos_procesados.append({
@@ -116,5 +134,72 @@ def procesar_sintesis_pdf(ruta_pdf):
     datos = procesar_texto_reporte(texto_bruto)
     df = pd.DataFrame(datos)
     df = df[df['NOMBRE'] != '']
+    
+    return df
+
+
+def procesar_archivo(ruta_archivo, ruta_excel_salida=None):
+    """
+    Función genérica para procesar archivos PDF o TXT y convertir a Excel.
+    
+    Args:
+        ruta_archivo (str): Ruta al archivo PDF o TXT
+        ruta_excel_salida (str, optional): Ruta de salida del Excel. 
+                                          Si no se especifica, se guarda en la misma carpeta con extensión .xlsx
+    
+    Returns:
+        pd.DataFrame: DataFrame con los datos procesados
+    """
+    ruta_archivo = Path(ruta_archivo)
+    
+    
+    if not ruta_archivo.exists():
+        raise FileNotFoundError(f"No se encontró el archivo: {ruta_archivo}")
+    
+    extension = ruta_archivo.suffix.lower()
+    texto_bruto = ""
+    
+
+    if extension == '.pdf':
+        try:
+            with pdfplumber.open(str(ruta_archivo)) as pdf:
+                for page in pdf.pages:
+                    texto_bruto += page.extract_text() or ""
+        except Exception as e:
+            raise Exception(f"Error al leer el PDF: {e}")
+    
+    elif extension == '.txt':
+        try:
+            with open(ruta_archivo, 'r', encoding='utf-8') as f:
+                texto_bruto = f.read()
+        except UnicodeDecodeError:
+            # Intentar con otra codificación si la primera falla
+            try:
+                with open(ruta_archivo, 'r', encoding='latin-1') as f:
+                    texto_bruto = f.read()
+            except Exception as e:
+                raise Exception(f"Error al leer el TXT: {e}")
+        except Exception as e:
+            raise Exception(f"Error al leer el TXT: {e}")
+    
+    else:
+        raise ValueError(f"Formato de archivo no soportado: {extension}. Use .pdf o .txt")
+    
+   
+    datos = procesar_texto_reporte(texto_bruto)
+    df = pd.DataFrame(datos)
+    df = df[df['NOMBRE'] != '']
+    
+ 
+    if ruta_excel_salida is None:
+        ruta_excel_salida = ruta_archivo.with_suffix('.xlsx')
+    
+    # Guardar a Excel
+    ruta_excel_salida = Path(ruta_excel_salida)
+    try:
+        df.to_excel(str(ruta_excel_salida), index=False, sheet_name='Operadores')
+        print(f"✓ Archivo Excel guardado en: {ruta_excel_salida}")
+    except Exception as e:
+        raise Exception(f"Error al guardar el Excel: {e}")
     
     return df
