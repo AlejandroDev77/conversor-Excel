@@ -73,13 +73,7 @@ def procesar_texto_reporte(texto):
                 cta_unica = cta_match.group(1)
                 resto = resto.replace(cta_unica, '', 1)
         
-        # 2. Extraer ESTADO (X o V)
-        est_match = re.search(r'\b(X|V)\b', resto)
-        est = est_match.group(1) if est_match else ''
-        if est:
-            resto = re.sub(r'\b(X|V)\b', '', resto, count=1)
-            
-        # 3. Extraer ROL
+        # 2. Extraer ROL (antes del ESTADO para no confundir V del nombre)
         rol = ''
         for r in roles_posibles:
             if r in resto:
@@ -87,19 +81,26 @@ def procesar_texto_reporte(texto):
                 resto = resto.replace(r, '', 1)
                 break
         
-        # 4. Extraer NRO.TELF
+        # 3. Extraer NRO.TELF
         nro_telf_match = re.search(r'\b(\d{7,8})\b', resto)
         nro_telf = nro_telf_match.group(1) if nro_telf_match else ''
         if nro_telf:
             resto = resto.replace(nro_telf, '', 1)
                 
-        # 5. Limpiar fechas y datos adicionales
+        # 4. Limpiar fechas y datos adicionales
         resto = re.sub(r'\b\d{2,4}/\d{2}/\d{2,4}\b', '', resto) 
         resto = re.sub(r'\b\d{2}/\d{2}/\d{2}\b', '', resto)
         
-        # 6. Limpiar DPTO y CIUDAD (con o sin espacio después de :)
+        # 5. Limpiar DPTO y CIUDAD (con o sin espacio después de :)
         resto = re.sub(r'\s*DPTO\s*:\s*\d+', '', resto, flags=re.IGNORECASE)
         resto = re.sub(r'\s*CIUDAD\s*:\s*\d+', '', resto, flags=re.IGNORECASE)
+        
+        # 6. Extraer ESTADO (X o V) - Usar el ÚLTIMO match para evitar confundir con V del nombre
+        est_matches = list(re.finditer(r'\b(X|V)\b', resto))
+        est = ''
+        if est_matches:
+            est = est_matches[-1].group(1)  # Tomar el último
+            resto = resto[:est_matches[-1].start()] + resto[est_matches[-1].end():]
         
         nombre = re.sub(r'\s+', ' ', resto).strip()
         
